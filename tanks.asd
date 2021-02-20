@@ -5,4 +5,5 @@
   :description "2D tanks"
   :components
   ((:module "game"
-    :components ((:file "package")))))
+    :components ((:file "package")
+		 (:file "core")))))
