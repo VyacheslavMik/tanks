@@ -178,3 +178,32 @@
 
 (defun run-on-mac-in-slime ()
   (sb-thread:interrupt-thread (sb-thread:main-thread) #'run-game))
+
+
+;; liballegro
+
+(defvar display)
+
+(cffi:defcallback %%al-main :int ((argc :int) (argv :pointer))
+  (declare (ignore argc argv))
+  (al:init)
+  (al:init-primitives-addon)
+  (al:set-new-display-flags '(:windowed :resizable :opengl))
+  (al:set-new-display-option :vsync 0 :require)
+  (setf display (al:create-display 800 600))
+  (al:clear-to-color (al:map-rgb 128 128 128))
+  (al:draw-filled-rectangle
+   100 110 400 450
+   (al:map-rgb 255 255 255))
+  (al:flip-display)
+  (al:rest-time 2)
+  (al:destroy-display display)
+  (al:uninstall-system)
+  0)
+
+(defun %al-main ()
+  (sb-int:with-float-traps-masked (:invalid :inexact :overflow)
+    (al:run-main 0 (cffi:null-pointer) (cffi:callback %%al-main))))
+
+(defun al-main ()
+  (sb-thread:interrupt-thread (sb-thread:main-thread) #'%al-main))

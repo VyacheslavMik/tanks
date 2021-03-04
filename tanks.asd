@@ -4,7 +4,9 @@
   :version "0.1"
   :description "2D tanks"
   :depends-on (#:sdl2
-               #:sdl2-image)
+               #:sdl2-image
+	       #:cffi
+	       #:cl-liballegro)
   :components ((:module "game"
 		:components ((:file "package")
 			     (:file "core"))))
