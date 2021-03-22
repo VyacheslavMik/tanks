@@ -1,204 +1,94 @@
 (in-package #:tanks)
 
-(defclass tex ()
-  ((renderer
-    :initarg :renderer
-    :initform (error "Must supply a renderer"))
-   (width
-    :accessor tex-width
-    :initform 0 )
-   (height
-    :accessor tex-height
-    :initform 0)
-   (texture
-    :accessor tex-texture
-    :initform nil)))
+(defparameter *base-dir* nil)
 
-(defun load-texture-from-file (renderer filename)
-  (let ((tex (make-instance 'tex :renderer renderer)))
-    (with-slots (renderer texture  width height) tex
-      (let ((surface (sdl2-image:load-image filename)))
-        (setf width (sdl2:surface-width surface))
-        (setf height (sdl2:surface-height surface))
-        (sdl2:set-color-key surface :true (sdl2:map-rgb (sdl2:surface-format surface)
-                                                        0 #xFF #xFF))
-        (setf texture (sdl2:create-texture-from-surface renderer surface))))
-    tex))
+(defun make-file-path (path)
+  (concatenate 'string *base-dir* path))
 
-(defun set-color (tex r g b)
-  (sdl2:set-texture-color-mod (tex-texture tex) r g b))
+(defun load-bitmap (path)
+  (al:load-bitmap (make-file-path path)))
 
-(defun set-blend-mode (tex blending)
-  (sdl2:set-texture-blend-mode (tex-texture tex) blending))
+(defclass game (al:system)
+  ()
+  (:default-initargs
+   :width 1024 :height 768
+   :title "Tanks"
+   :logic-fps 60
+   :display-flags '(:opengl :opengl-3-0)
+   :display-options '((:sample-buffers 1 :suggest)
+        	      (:samples 8 :suggest))))
 
-(defun set-alpha (tex alpha)
-  (sdl2:set-texture-alpha-mod (tex-texture tex) alpha))
+(defclass tank-weapon ()
+  ((base :accessor base :initarg :base)
+   (barrel :accessor barrel :initarg :barrel)))
 
-(defun render (tex x y &key clip)
-  (with-slots (renderer texture width height) tex
-    (sdl2:render-copy renderer
-                      texture
-                      :source-rect clip
-                      :dest-rect (sdl2:make-rect x
-                                                 y
-                                                 (if clip (sdl2:rect-width clip) width)
-                                                 (if clip (sdl2:rect-height clip) height)))))
+(defclass tank-texture ()
+  ((hull :accessor hull)
+   (tracks :accessor tracks)))
 
-(defun test-render-clear (renderer)
-  (sdl2:set-render-draw-color renderer 0 0 0 255)
-  (sdl2:render-clear renderer))
+(defparameter *tank-weapons* (make-array '(8)))
+(defparameter *tank-hulls* (make-array '(8)))
+(defparameter *tank-tracks* (make-array '(4)))
 
-(defun test-render-hello (renderer)
-  (sdl2:set-render-draw-color renderer 255 0 0 255)
-  ;; H
-  (sdl2:render-draw-line renderer 20 20 20 100)
-  (sdl2:render-draw-line renderer 20 60 60 60)
-  (sdl2:render-draw-line renderer 60 20 60 100)
-  ;; E
-  (sdl2:render-draw-line renderer 80 20 80 100)
-  (sdl2:render-draw-line renderer 80 20 120 20)
-  (sdl2:render-draw-line renderer 80 60 120 60)
-  (sdl2:render-draw-line renderer 80 100 120 100)
-  ;; L
-  (sdl2:render-draw-line renderer 140 20 140 100)
-  (sdl2:render-draw-line renderer 140 100 180 100)
-  ;; L
-  (sdl2:render-draw-line renderer 200 20 200 100)
-  (sdl2:render-draw-line renderer 200 100 240 100)
-  ;; O
-  (sdl2:render-draw-line renderer 260 20 260 100)
-  (sdl2:render-draw-line renderer 260 100 300 100)
-  (sdl2:render-draw-line renderer 300 20 300 100)
-  (sdl2:render-draw-line renderer 260 20 300 20))
+(defun load-tank-weapon (idx)
+  (let* ((fmt "assets/Weapon_Color_A/Gun_0~a_~a.png")
+	 (barrel (format nil fmt idx "A"))
+	 (base (format nil fmt idx "B")))
+    (make-instance 'tank-weapon
+		   :barrel (load-bitmap barrel)
+		   :base (load-bitmap base))))
 
-(defun test-render-lines (renderer)
-  (sdl2:with-points ((a 200 200)
-                     (b 300 400)
-                     (c 400 200))
-    (sdl2:set-render-draw-color renderer 0 0 255 255)
-    (multiple-value-bind (points num) (sdl2:points* a b c)
-      (sdl2:render-draw-lines renderer points num))))
+(defun load-tank-weapons ()
+  (loop for idx from 1 to 8
+	do (setf (aref *tank-weapons* (1- idx)) (load-tank-weapon idx))))
 
-(defun test-render-points (renderer)
-  (sdl2:with-points ((a (random 800) (random 800))
-                     (b (random 800) (random 800))
-                     (c (random 800) (random 800)))
-    (sdl2:set-render-draw-color renderer 0 255 0 255)
-    (multiple-value-bind (points num) (sdl2:points* a b c)
-      (sdl2:render-draw-points renderer points num))))
+(defun load-tank-hull (idx)
+  (let ((fmt "assets/Hulls_Color_A/Hull_0~a.png"))
+    (load-bitmap (format nil fmt idx))))
 
-(defun test-render-rect (renderer)
-  (sdl2:render-draw-rect renderer (sdl2:make-rect 400 400 35 35)))
+(defun load-tank-hulls ()
+  (loop for idx from 1 to 8
+	do (setf (aref *tank-hulls* (1- idx)) (load-tank-hull idx))))
 
-(defun test-render-rects (renderer)
-  (multiple-value-bind (rects num)
-      (apply #'sdl2:rects*
-             (loop :for x :upto 5
-                   :for y :upto 5
-                   :collect (sdl2:make-rect (+ 400 (* x 10)) (+ 200 (* y 10)) 8 8)))
-    (sdl2:render-draw-rects renderer rects num)))
+(defun load-tank-track (idx)
+  (let ((fmt "assets/Tracks/Track_~a_~a.png"))
+    (vector
+     (load-bitmap (format nil fmt idx "A"))
+     (load-bitmap (format nil fmt idx "B")))))
 
-(defun test-render-fill-rect (renderer)
-  (sdl2:render-fill-rect renderer (sdl2:make-rect 445 400 35 35)))
+(defun load-tank-tracks ()
+  (loop for idx from 1 to 4
+	do (setf (aref *tank-tracks* (1- idx)) (load-tank-track idx))))
 
-(defun test-render-fill-rects (renderer)
-  (multiple-value-bind (rects num)
-      (apply #'sdl2:rects*
-             (loop :for x :upto 5
-                   :collect (sdl2:make-rect (+ 500 (* x 10)) 400 8 8)))
-    (sdl2:set-render-draw-color renderer 255 0 255 255)
-    (sdl2:render-fill-rects renderer rects num)))
+(defmethod al:update ((sys game))
+  (declare (ignore sys))
+  ;; do some update logic here
+  )
 
-(defun run-game ()
-  (sdl2:make-this-thread-main
-   (lambda ()
-     (sdl2:with-init (:everything)
-       (sdl2:with-window (win :w 640 :h 480 :flags '(:shown))
-	 (sdl2:with-renderer (renderer win :flags '(:accelerated))
-           (sdl2-image:init '(:png))
-	   (let ((tex (load-texture-from-file renderer "assets/Tanks/Tank01.png"))
-                 (clip (sdl2:make-rect 0 0 256 256))
-                 (sprite-frames 2)
-                 (current-sprite-frame 0)
-                 (frame 0)
-                 (frames-per-sprite 8))
-             (sdl2:with-event-loop (:method :poll)
-	       (:keydown (:keysym keysym)
-		         (let ((scancode (sdl2:scancode-value keysym))
-			       (sym (sdl2:sym-value keysym))
-			       (mod-value (sdl2:mod-value keysym)))
-			   (cond
-	                     ((sdl2:scancode= scancode :scancode-w) (format t "~a~%" "WALK"))
-	                     ((sdl2:scancode= scancode :scancode-s) (sdl2:show-cursor))
-	                     ((sdl2:scancode= scancode :scancode-h) (sdl2:hide-cursor)))
-			   (format t "Key sym: ~a, code: ~a, mod: ~a~%"
-				   sym
-				   scancode
-				   mod-value)))
+(defmethod al:render ((sys game))
+  (al:clear-to-color (al:map-rgb 128 128 128))
+  (let* ((time (al:system-time sys))
+	 (track-idx (if (zerop (mod (floor (* time 1000)) 16))
+			0
+			1)))
+    (al:draw-bitmap (aref *tank-hulls* 0) 100 100 0)
+    ;;    (print al:system-time)
+    (al:draw-bitmap (aref (aref *tank-tracks* 0) track-idx) 152 110 0)
+    (al:draw-bitmap (aref (aref *tank-tracks* 0) track-idx) 262 110 0)
+    (al:draw-bitmap (base (aref *tank-weapons* 0)) 180 200 0)
+    (al:draw-bitmap (barrel (aref *tank-weapons* 0)) 210 90 0))
+  ;;  (al:draw-scaled-bitmap (aref *tank-hulls* 0) 0 0 256 256 200 200 64 64 0)
+  (al:flip-display))
 
-	       (:keyup (:keysym keysym)
-		       (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
-		         (sdl2:push-event :quit)))
-
-	       (:mousemotion (:x x :y y :xrel xrel :yrel yrel :state state)
-	                     (format t "Mouse motion abs(rel): ~a (~a), ~a (~a)~%Mouse state: ~a~%"
-	                             x xrel y yrel state))
-
-	       (:idle ()
-                      #+nil((gl:clear :color-buffer)
-                            (gl:begin :triangles)
-                            (gl:color 1.0 0.0 0.0)
-                            (gl:vertex 0.0 1.0)
-                            (gl:vertex -1.0 -1.0)
-                            (gl:vertex 1.0 -1.0)
-                            (gl:end)
-                            (gl:flush))
-                      (test-render-clear renderer)
-                      #+nil(test-render-hello renderer)
-                      #+nil(test-render-lines renderer)
-                      #+nil(test-render-points renderer)
-                      #+nil(test-render-rect renderer)
-                      #+nil(test-render-rects renderer)
-                      #+nil(test-render-fill-rect renderer)
-                      #+nil(test-render-fill-rects renderer)
-                      (render tex
-                              (round (/ (- 640 (sdl2:rect-width clip)) 2))
-                              (round (/ (- 480 (sdl2:rect-height clip)) 2))
-                              :clip clip)
-                      (sdl2:render-present renderer)
-                      (incf frame)
-                      (when (zerop (rem frame frames-per-sprite))
-                        (incf current-sprite-frame)
-                        (when (>= current-sprite-frame sprite-frames)
-                          (setf current-sprite-frame 0))
-                        (setf (sdl2:rect-x clip) (* current-sprite-frame (sdl2:rect-width clip))))
-                      (sdl2:delay 25))
-
-	       (:quit () t)))))))))
-
-(defun run-on-mac-in-slime ()
-  (sb-thread:interrupt-thread (sb-thread:main-thread) #'run-game))
-
-
-;; liballegro
-
-(defvar display)
+(defmethod al:system-loop :before ((sys game))
+  (declare (ignore sys))
+  (load-tank-weapons)
+  (load-tank-tracks)
+  (load-tank-hulls))
 
 (cffi:defcallback %%al-main :int ((argc :int) (argv :pointer))
   (declare (ignore argc argv))
-  (al:init)
-  (al:init-primitives-addon)
-  (al:set-new-display-flags '(:windowed :resizable :opengl))
-  (al:set-new-display-option :vsync 0 :require)
-  (setf display (al:create-display 800 600))
-  (al:clear-to-color (al:map-rgb 128 128 128))
-  (al:draw-filled-rectangle
-   100 110 400 450
-   (al:map-rgb 255 255 255))
-  (al:flip-display)
-  (al:rest-time 2)
-  (al:destroy-display display)
-  (al:uninstall-system)
+  (al:run-system (make-instance 'game))
   0)
 
 (defun %al-main ()
