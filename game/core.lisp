@@ -60,31 +60,118 @@
   (loop for idx from 1 to 4
 	do (setf (aref *tank-tracks* (1- idx)) (load-tank-track idx))))
 
+(defparameter *pressed-keys* ())
+
+(defun key-pressed-p (key)
+  (member key *pressed-keys*))
+
+(defclass animation ()
+  ((textures :accessor textures :initarg :textures)
+   (frame-timer :accessor frame-timer :initform 0.0)
+   (frame-delay :accessor frame-delay :initform 0.05)
+   (current-frame :accessor current-frame :initform 0)
+   (loop-animation :accessor loop-animation :initform t)
+   (finished-playing :accessor finished-playing :initform nil)))
+
+(defun play-animation (animation)
+  (when (finished-playing animation)
+    (setf (current-frame animation) 0)
+    (setf (finished-playing animation) nil)))
+
+(defun stop-animation (animation)
+  (unless (finished-playing animation)
+    (setf (current-frame animation) 0)
+    (setf (finished-playing animation) t)))
+
+(defun update-animation (animation frame-time)
+  (unless (finished-playing animation)
+    (incf (frame-timer animation) frame-time)
+    (when (> (frame-timer animation) (frame-delay animation))
+      (incf (current-frame animation))
+
+      (when (>= (current-frame animation) (length (textures animation)))
+	(if (loop-animation animation)
+	    (setf (current-frame animation) 0)
+	    (progn
+	      (setf (current-frame animation) (1- (length (textures animation))))
+	      (setf (finished-playing animation) t))))
+
+      (setf (frame-timer animation) 0.0))))
+
+(defclass tank ()
+  ((hull :accessor hull :initarg :hull)
+   (tracks :accessor tracks :initarg :tracks)
+   (weapon :accessor weapon :initarg :weapon)
+   (moving-p :accessor moving-p :initarg :moving-p)))
+
+(defun make-tank (hull tracks weapon)
+  (let ((tracks (make-instance 'animation :textures tracks)))
+    (stop-animation tracks)
+    (make-instance 'tank
+		   :hull hull
+		   :tracks tracks
+		   :weapon weapon)))
+
+(defun update-tank (tank frame-time)
+  (if (key-pressed-p :w)
+      (play-animation (tracks tank))
+      (stop-animation (tracks tank)))
+  (update-animation (tracks tank) frame-time))
+
+(defun draw-animation (animation cx cy dx dy angle)
+  (with-slots (textures current-frame) animation
+    (let ((texture (aref textures current-frame)))
+      (al:draw-rotated-bitmap texture cx cy dx dy angle 0))))
+
+(defparameter *angle* 0)
+
+(defun draw-tank (tank x y)
+  (let ((cx 128)
+	(cy 128)
+	(angle (/ (* *angle* pi) 180)))
+    (with-slots (hull tracks weapon) tank
+      (al:draw-rotated-bitmap hull cx cy x y angle 0)
+      (draw-animation tracks 76 120 x y angle)
+      (draw-animation tracks -34 120 x y angle)
+      (al:draw-rotated-bitmap (base weapon) 47 15 x y angle 0)
+      (al:draw-rotated-bitmap (barrel weapon) 18 132 x y angle 0))))
+
+(defparameter *tank* nil)
+
 (defmethod al:update ((sys game))
-  (declare (ignore sys))
-  ;; do some update logic here
-  )
+  (when (key-pressed-p :r)
+    (incf *angle* 1))
+  (when (key-pressed-p :e)
+    (setf *angle* 0))
+  (let ((frame-time (al:frame-time sys)))
+    (update-tank *tank* frame-time)))
 
 (defmethod al:render ((sys game))
   (al:clear-to-color (al:map-rgb 128 128 128))
-  (let* ((time (al:system-time sys))
-	 (track-idx (if (zerop (mod (floor (* time 1000)) 16))
-			0
-			1)))
-    (al:draw-bitmap (aref *tank-hulls* 0) 100 100 0)
-    ;;    (print al:system-time)
-    (al:draw-bitmap (aref (aref *tank-tracks* 0) track-idx) 152 110 0)
-    (al:draw-bitmap (aref (aref *tank-tracks* 0) track-idx) 262 110 0)
-    (al:draw-bitmap (base (aref *tank-weapons* 0)) 180 200 0)
-    (al:draw-bitmap (barrel (aref *tank-weapons* 0)) 210 90 0))
+  (draw-tank *tank* 200 200)
   ;;  (al:draw-scaled-bitmap (aref *tank-hulls* 0) 0 0 256 256 200 200 64 64 0)
   (al:flip-display))
+
+(defmethod al:key-down-handler ((sys game))
+  (let ((key (cffi:foreign-slot-value (al:event sys)
+				      '(:struct al:keyboard-event)
+				      'al::keycode)))
+    (pushnew key *pressed-keys*)))
+
+(defmethod al:key-up-handler ((sys game))
+  (let ((key (cffi:foreign-slot-value (al:event sys)
+				      '(:struct al:keyboard-event)
+				      'al::keycode)))
+    (setf *pressed-keys* (remove key *pressed-keys*))))
 
 (defmethod al:system-loop :before ((sys game))
   (declare (ignore sys))
   (load-tank-weapons)
   (load-tank-tracks)
-  (load-tank-hulls))
+  (load-tank-hulls)
+  (setf *tank* (make-tank (aref *tank-hulls* 0)
+			  (aref *tank-tracks* 0)
+			  (aref *tank-weapons* 0))))
 
 (cffi:defcallback %%al-main :int ((argc :int) (argv :pointer))
   (declare (ignore argc argv))
