@@ -171,7 +171,7 @@
 	(ecase moving-direction
 	  (:up (decf pos-y delta))
 	  (:down (incf pos-y delta))
-	  (:left (decf pos-y delta))
+	  (:left (decf pos-x delta))
 	  (:right (incf pos-x delta)))))))
 
 (defun update-tank (tank frame-time)
