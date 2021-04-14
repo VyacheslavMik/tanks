@@ -102,54 +102,131 @@
   ((hull :accessor hull :initarg :hull)
    (tracks :accessor tracks :initarg :tracks)
    (weapon :accessor weapon :initarg :weapon)
-   (moving-p :accessor moving-p :initarg :moving-p)))
+   (moving-p :accessor moving-p :initarg :moving-p)
+   (moving-direction :accessor moving-direction :initform :up)
+   (pos-x :accessor pos-x :initarg :pos-x :initform (error "pos-x must be provided"))
+   (pos-y :accessor pos-y :initarg :pos-y :initform (error "pos-y must be provided"))
+   (velocity :accessor velocity :initform 200)
+   (turn-rate :accessor turn-rate :initform 90)
+   (current-angle :accessor current-angle :initform 0)))
 
-(defun make-tank (hull tracks weapon)
+(defparameter *font* nil)
+
+(defun draw-text (text x y)
+  (al:draw-text *font* (al:map-rgba-f 1 1 1 0) x y 0 text))
+
+(defun make-tank (hull tracks weapon x y)
   (let ((tracks (make-instance 'animation :textures tracks)))
     (stop-animation tracks)
     (make-instance 'tank
 		   :hull hull
 		   :tracks tracks
-		   :weapon weapon)))
+		   :weapon weapon
+		   :pos-x x
+		   :pos-y y)))
+
+(defun get-angle-for-direction (direction)
+  (ecase direction
+    (:up 0)
+    (:right 90)
+    (:down 180)
+    (:left 270)))
+
+(defparameter *debug-p* t)
+
+(defun print-message (fmt &rest args)
+  (when *debug-p*
+    (setf *debug-p* nil)
+    (apply #'format t fmt args)))
+
+;; TODO: refactor function
+(defun update-tank-angle (tank frame-time)
+  (with-slots (moving-direction current-angle moving-p) tank
+    (when moving-p
+      (let ((desired-angle (get-angle-for-direction moving-direction)))
+	(if (< (abs (- desired-angle current-angle)) 1)
+	    (setf current-angle desired-angle)
+	    (let ((rotate-clockwise-p (< (mod (- desired-angle current-angle) 360) 180))
+		  (angle (* (turn-rate tank) frame-time)))
+	      (if rotate-clockwise-p
+		  (incf (current-angle tank) angle)
+		  (decf (current-angle tank) angle))
+	      (cond
+		((> (current-angle tank) 360)
+		 (decf (current-angle tank) 360))
+
+		((< (current-angle tank) 0)
+		 (incf (current-angle tank) 360)))))))))
+
+(defun tank-turning-p (tank)
+  (with-slots (moving-direction current-angle moving-p) tank
+    (and moving-p
+	 (/= (get-angle-for-direction moving-direction)
+	     current-angle))))
+
+(defun update-tank-position (tank frame-time)
+  (with-slots (moving-direction moving-p pos-x pos-y velocity) tank
+    (when (and moving-p (not (tank-turning-p tank)))
+      (let ((delta (* velocity frame-time)))
+	(ecase moving-direction
+	  (:up (decf pos-y delta))
+	  (:down (incf pos-y delta))
+	  (:left (decf pos-y delta))
+	  (:right (incf pos-x delta)))))))
 
 (defun update-tank (tank frame-time)
-  (if (key-pressed-p :w)
+  (if (moving-p tank)
       (play-animation (tracks tank))
       (stop-animation (tracks tank)))
-  (update-animation (tracks tank) frame-time))
+  (update-animation (tracks tank) frame-time)
+  (update-tank-angle tank frame-time)
+  (update-tank-position tank frame-time))
 
 (defun draw-animation (animation cx cy dx dy angle)
   (with-slots (textures current-frame) animation
     (let ((texture (aref textures current-frame)))
       (al:draw-rotated-bitmap texture cx cy dx dy angle 0))))
 
-(defparameter *angle* 0)
-
-(defun draw-tank (tank x y)
-  (let ((cx 128)
-	(cy 128)
-	(angle (/ (* *angle* pi) 180)))
-    (with-slots (hull tracks weapon) tank
-      (al:draw-rotated-bitmap hull cx cy x y angle 0)
-      (draw-animation tracks 76 120 x y angle)
-      (draw-animation tracks -34 120 x y angle)
-      (al:draw-rotated-bitmap (base weapon) 47 15 x y angle 0)
-      (al:draw-rotated-bitmap (barrel weapon) 18 132 x y angle 0))))
+(defun draw-tank (tank)
+  (with-slots (hull tracks weapon current-angle pos-x pos-y) tank
+    (let ((angle (/ (* current-angle pi) 180)))
+      (al:draw-rotated-bitmap hull 128 128 pos-x pos-y angle 0)
+      (draw-animation tracks 76 120 pos-x pos-y angle)
+      (draw-animation tracks -34 120 pos-x pos-y angle)
+      (al:draw-rotated-bitmap (base weapon) 47 15 pos-x pos-y angle 0)
+      (al:draw-rotated-bitmap (barrel weapon) 18 132 pos-x pos-y angle 0))))
 
 (defparameter *tank* nil)
 
 (defmethod al:update ((sys game))
-  (when (key-pressed-p :r)
-    (incf *angle* 1))
-  (when (key-pressed-p :e)
-    (setf *angle* 0))
+  (cond
+    ((key-pressed-p :w)
+     (setf (moving-direction *tank*) :up)
+     (setf (moving-p *tank*) t))
+
+    ((key-pressed-p :d)
+     (setf (moving-direction *tank*) :right)
+     (setf (moving-p *tank*) t))
+
+    ((key-pressed-p :s)
+     (setf (moving-direction *tank*) :down)
+     (setf (moving-p *tank*) t))
+
+    ((key-pressed-p :a)
+     (setf (moving-direction *tank*) :left)
+     (setf (moving-p *tank*) t))
+
+    (t
+     (setf (moving-p *tank*) nil)))
+				   
   (let ((frame-time (al:frame-time sys)))
     (update-tank *tank* frame-time)))
 
 (defmethod al:render ((sys game))
   (al:clear-to-color (al:map-rgb 128 128 128))
-  (draw-tank *tank* 200 200)
-  ;;  (al:draw-scaled-bitmap (aref *tank-hulls* 0) 0 0 256 256 200 200 64 64 0)
+  (draw-tank *tank*)
+;;  (draw-text (format nil "Direction: ~a" (moving-direction *tank*)) 500 10)
+;;  (draw-text (format nil "Angle: ~a" (current-angle *tank*)) 500 40)
   (al:flip-display))
 
 (defmethod al:key-down-handler ((sys game))
@@ -171,7 +248,10 @@
   (load-tank-hulls)
   (setf *tank* (make-tank (aref *tank-hulls* 0)
 			  (aref *tank-tracks* 0)
-			  (aref *tank-weapons* 0))))
+			  (aref *tank-weapons* 0)
+			  200
+			  200))
+  (setf *font* (al:load-ttf-font "/System/Library/Fonts/Supplemental/Arial.ttf" 32 0)))
 
 (cffi:defcallback %%al-main :int ((argc :int) (argv :pointer))
   (declare (ignore argc argv))
