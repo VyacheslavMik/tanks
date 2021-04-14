@@ -262,5 +262,5 @@
   (sb-int:with-float-traps-masked (:invalid :inexact :overflow)
     (al:run-main 0 (cffi:null-pointer) (cffi:callback %%al-main))))
 
-(defun al-main ()
-  (sb-thread:interrupt-thread (sb-thread:main-thread) #'%al-main))
+(defun main ()
+  (interrupt-thread (current-thread) #'%al-main))

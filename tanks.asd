@@ -3,11 +3,10 @@
 (defsystem #:tanks
   :version "0.1"
   :description "2D tanks"
-  :depends-on (#:sdl2
-               #:sdl2-image
-	       #:cffi
+  :depends-on (#:bordeaux-threads
+               #:cffi
 	       #:cl-liballegro)
-  :components ((:module "game"
+  :components ((:module "src"
 		:components ((:file "package")
 			     (:file "core"))))
   :build-operation "program-op"
