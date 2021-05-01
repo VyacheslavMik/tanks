@@ -1,9 +1,9 @@
 (in-package #:tanks)
 
-(defparameter *base-dir* nil)
+(defparameter *base-dir* (uiop:getcwd))
 
 (defun make-file-path (path)
-  (concatenate 'string *base-dir* path))
+  (format nil "~a~a" *base-dir* path))
 
 (defun load-bitmap (path)
   (al:load-bitmap (make-file-path path)))
@@ -302,5 +302,5 @@
   (sb-int:with-float-traps-masked (:invalid :inexact :overflow)
     (al:run-main 0 (cffi:null-pointer) (cffi:callback %%al-main))))
 
-(defun al-main ()
-  (sb-thread:interrupt-thread (sb-thread:main-thread) #'%al-main))
+(defun main ()
+  (interrupt-thread (current-thread) #'%al-main))
