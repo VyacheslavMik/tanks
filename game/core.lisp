@@ -11,7 +11,7 @@
 (defclass game (al:system)
   ()
   (:default-initargs
-   :width 1024 :height 768
+   :width 1600 :height 1216
    :title "Tanks"
    :logic-fps 60
    :display-flags '(:opengl :opengl-3-0)
@@ -29,6 +29,7 @@
 (defparameter *tank-weapons* (make-array '(8)))
 (defparameter *tank-hulls* (make-array '(8)))
 (defparameter *tank-tracks* (make-array '(4)))
+(defparameter *tiles* (make-array '(3)))
 
 (defun load-tank-weapon (idx)
   (let* ((fmt "assets/Weapon_Color_A/Gun_0~a_~a.png")
@@ -59,6 +60,15 @@
 (defun load-tank-tracks ()
   (loop for idx from 1 to 4
 	do (setf (aref *tank-tracks* (1- idx)) (load-tank-track idx))))
+
+(defun load-tiles ()
+  (let ((fmt "assets/Tiles/Ground_Tile_0~a_~a.png"))
+    (loop for ch in '("A" "B" "C")
+	  for idx from 0
+	  do (setf (aref *tiles* idx)
+		   (vector
+		    (load-bitmap (format nil fmt 1 ch))
+		    (load-bitmap (format nil fmt 2 ch)))))))
 
 (defparameter *pressed-keys* ())
 
@@ -109,6 +119,22 @@
    (velocity :accessor velocity :initform 200)
    (turn-rate :accessor turn-rate :initform 90)
    (current-angle :accessor current-angle :initform 0)))
+
+(defclass world ()
+  ((tiles :accessor tiles)
+   (width :reader width :initform 25)
+   (height :reader height :initform 20)))
+
+(defparameter *world* nil)
+
+(defun generate-world ()
+  (let ((tile (random 3))
+	(world (make-instance 'world)))
+    (setf (tiles world) (make-array (list (width world) (height world))))
+    (loop for x from 0 below (width world)
+	  do (loop for y from 0 below (height world)
+		   do (setf (aref (tiles world) x y) (vector tile (random 2)))))
+    (setf *world* world)))
 
 (defparameter *font* nil)
 
@@ -182,19 +208,23 @@
   (update-tank-angle tank frame-time)
   (update-tank-position tank frame-time))
 
-(defun draw-animation (animation cx cy dx dy angle)
+(defun draw-animation (animation cx cy dx dy scale angle)
   (with-slots (textures current-frame) animation
     (let ((texture (aref textures current-frame)))
-      (al:draw-rotated-bitmap texture cx cy dx dy angle 0))))
+      (al:draw-scaled-rotated-bitmap texture cx cy dx dy scale scale angle 0))))
 
 (defun draw-tank (tank)
   (with-slots (hull tracks weapon current-angle pos-x pos-y) tank
-    (let ((angle (/ (* current-angle pi) 180)))
-      (al:draw-rotated-bitmap hull 128 128 pos-x pos-y angle 0)
-      (draw-animation tracks 76 120 pos-x pos-y angle)
-      (draw-animation tracks -34 120 pos-x pos-y angle)
-      (al:draw-rotated-bitmap (base weapon) 47 15 pos-x pos-y angle 0)
-      (al:draw-rotated-bitmap (barrel weapon) 18 132 pos-x pos-y angle 0))))
+    (let ((angle (/ (* current-angle pi) 180))
+	  (scale 0.25))
+      (al:draw-scaled-rotated-bitmap hull 128 128 pos-x pos-y scale scale angle 0)
+      (draw-animation tracks 76 120 pos-x pos-y scale angle)
+      (draw-animation tracks -34 120 pos-x pos-y scale angle)
+      (al:draw-scaled-rotated-bitmap (base weapon) 47 15 pos-x pos-y scale scale angle 0)
+      (al:draw-scaled-rotated-bitmap (barrel weapon) 18 132 pos-x pos-y scale scale angle 0))))
+
+(defun draw-tile (tile x y)
+  (al:draw-scaled-rotated-bitmap tile 128 128 x y 0.25 0.25 0 0))
 
 (defparameter *tank* nil)
 
@@ -224,6 +254,14 @@
 
 (defmethod al:render ((sys game))
   (al:clear-to-color (al:map-rgb 128 128 128))
+  (loop for x from 0 below (width *world*)
+	do (loop for y from 0 below (height *world*)
+		 for indexes = (aref (tiles *world*) x y)
+		 for idx1 = (aref indexes 0)
+		 for idx2 = (aref indexes 1)
+		 do (draw-tile (aref (aref *tiles* idx1) idx2)
+			       (+ (* x 64) 32)
+			       (+ (* y 64) 32))))
   (draw-tank *tank*)
 ;;  (draw-text (format nil "Direction: ~a" (moving-direction *tank*)) 500 10)
 ;;  (draw-text (format nil "Angle: ~a" (current-angle *tank*)) 500 40)
@@ -246,6 +284,8 @@
   (load-tank-weapons)
   (load-tank-tracks)
   (load-tank-hulls)
+  (load-tiles)
+  (generate-world)
   (setf *tank* (make-tank (aref *tank-hulls* 0)
 			  (aref *tank-tracks* 0)
 			  (aref *tank-weapons* 0)
