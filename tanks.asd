@@ -5,6 +5,7 @@
   :description "2D tanks"
   :depends-on (#:bordeaux-threads
                #:cffi
+               #:float-features
 	       #:cl-liballegro)
   :components ((:module "src"
 		:components ((:file "package")

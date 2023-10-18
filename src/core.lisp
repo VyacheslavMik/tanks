@@ -299,7 +299,7 @@
   0)
 
 (defun %al-main ()
-  (sb-int:with-float-traps-masked (:invalid :inexact :overflow)
+  (with-float-traps-masked (:invalid :inexact :overflow)
     (al:run-main 0 (cffi:null-pointer) (cffi:callback %%al-main))))
 
 (defun main ()
