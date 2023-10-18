@@ -296,7 +296,7 @@
 			  (aref *tank-weapons* 0)
 			  200
 			  200))
-  (setf *font* (al:load-ttf-font "/System/Library/Fonts/Supplemental/Arial.ttf" 32 0)))
+  (setf *font* (al:load-ttf-font (make-file-path "assets/Font/RobotoMono-Regular.ttf") 32 0)))
 
 (cffi:defcallback %%al-main :int ((argc :int) (argv :pointer))
   (declare (ignore argc argv))
