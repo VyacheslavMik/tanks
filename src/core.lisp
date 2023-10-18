@@ -1,9 +1,14 @@
 (in-package #:tanks)
 
 (defparameter *base-dir* (uiop:getcwd))
+(defparameter *build* nil)
 
 (defun make-file-path (path)
-  (format nil "~a~a" *base-dir* path))
+  (if *build*
+      (uiop:native-namestring
+       (merge-pathnames path *base-dir*))
+      (uiop:native-namestring
+       (asdf:system-relative-pathname :tanks path))))
 
 (defun load-bitmap (path)
   (al:load-bitmap (make-file-path path)))
