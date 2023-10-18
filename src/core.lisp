@@ -269,7 +269,7 @@
 			       (+ (* y 64) 32))))
   (draw-tank *tank*)
 ;;  (draw-text (format nil "Direction: ~a" (moving-direction *tank*)) 500 10)
-;;  (draw-text (format nil "Angle: ~a" (current-angle *tank*)) 500 40)
+;;  (draw-text (format nil "Angle: ~6,2f" (current-angle *tank*)) 500 40)
   (al:flip-display))
 
 (defmethod al:key-down-handler ((sys game))
