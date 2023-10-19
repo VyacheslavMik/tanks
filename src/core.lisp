@@ -1,9 +1,14 @@
 (in-package #:tanks)
 
 (defparameter *base-dir* (uiop:getcwd))
+(defparameter *build* nil)
 
 (defun make-file-path (path)
-  (format nil "~a~a" *base-dir* path))
+  (if *build*
+      (uiop:native-namestring
+       (merge-pathnames path *base-dir*))
+      (uiop:native-namestring
+       (asdf:system-relative-pathname :tanks path))))
 
 (defun load-bitmap (path)
   (al:load-bitmap (make-file-path path)))
@@ -264,7 +269,7 @@
 			       (+ (* y 64) 32))))
   (draw-tank *tank*)
 ;;  (draw-text (format nil "Direction: ~a" (moving-direction *tank*)) 500 10)
-;;  (draw-text (format nil "Angle: ~a" (current-angle *tank*)) 500 40)
+;;  (draw-text (format nil "Angle: ~6,2f" (current-angle *tank*)) 500 40)
   (al:flip-display))
 
 (defmethod al:key-down-handler ((sys game))
@@ -291,7 +296,7 @@
 			  (aref *tank-weapons* 0)
 			  200
 			  200))
-  (setf *font* (al:load-ttf-font "/System/Library/Fonts/Supplemental/Arial.ttf" 32 0)))
+  (setf *font* (al:load-ttf-font (make-file-path "assets/Font/RobotoMono-Regular.ttf") 32 0)))
 
 (cffi:defcallback %%al-main :int ((argc :int) (argv :pointer))
   (declare (ignore argc argv))
@@ -299,7 +304,7 @@
   0)
 
 (defun %al-main ()
-  (sb-int:with-float-traps-masked (:invalid :inexact :overflow)
+  (with-float-traps-masked (:invalid :inexact :overflow)
     (al:run-main 0 (cffi:null-pointer) (cffi:callback %%al-main))))
 
 (defun main ()

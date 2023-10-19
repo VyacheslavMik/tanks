@@ -3,8 +3,11 @@
 (defsystem #:tanks
   :version "0.1"
   :description "2D tanks"
-  :depends-on (#:bordeaux-threads
+  :depends-on (#:asdf
+               #:uiop
+               #:bordeaux-threads
                #:cffi
+               #:float-features
 	       #:cl-liballegro)
   :components ((:module "src"
 		:components ((:file "package")
